@@ -9,16 +9,33 @@ import (
 	"net/http"
 	"time"
 
-	httpadapter "github.com/thitiphum-dev/7-solutions-backend-challenge/user-management/internal/adapters/http"
 	"github.com/thitiphum-dev/7-solutions-backend-challenge/user-management/internal/config"
 )
 
 func Run(ctx context.Context, cfg *config.Config) error {
-	router := httpadapter.NewRouter()
+	deps, err := setup(ctx, cfg)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		closeCtx, cancel := context.WithTimeout(
+			context.Background(),
+			5*time.Second,
+		)
+		defer cancel()
+
+		if err := deps.close(closeCtx); err != nil {
+			slog.Error(
+				"failed to close application resources",
+				"error", err,
+			)
+		}
+	}()
 
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           router,
+		Handler:           deps.router,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -47,7 +64,7 @@ func Run(ctx context.Context, cfg *config.Config) error {
 
 	case <-ctx.Done():
 		slog.Info(
-			"shutting down HTTP server",
+			"shutting down application",
 			"service", cfg.ServiceName,
 		)
 
