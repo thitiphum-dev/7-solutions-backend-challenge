@@ -14,11 +14,13 @@ import (
 	"github.com/thitiphum-dev/7-solutions-backend-challenge/user-management/internal/adapters/security"
 	"github.com/thitiphum-dev/7-solutions-backend-challenge/user-management/internal/application"
 	"github.com/thitiphum-dev/7-solutions-backend-challenge/user-management/internal/config"
+	"github.com/thitiphum-dev/7-solutions-backend-challenge/user-management/internal/user"
 )
 
 type dependencies struct {
-	router      http.Handler
-	mongoClient *mongodb.Client
+	router         http.Handler
+	mongoClient    *mongodb.Client
+	userRepository user.Repository
 }
 
 func setup(ctx context.Context, cfg *config.Config) (*dependencies, error) {
@@ -72,8 +74,9 @@ func setup(ctx context.Context, cfg *config.Config) (*dependencies, error) {
 	)
 
 	return &dependencies{
-		router:      router,
-		mongoClient: mongoClient,
+		router:         router,
+		mongoClient:    mongoClient,
+		userRepository: userRepository,
 	}, nil
 }
 

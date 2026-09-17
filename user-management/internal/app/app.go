@@ -7,8 +7,10 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
+	usercountworker "github.com/thitiphum-dev/7-solutions-backend-challenge/user-management/internal/adapters/worker"
 	"github.com/thitiphum-dev/7-solutions-backend-challenge/user-management/internal/config"
 )
 
@@ -33,6 +35,13 @@ func Run(ctx context.Context, cfg *config.Config) error {
 		}
 	}()
 
+	workerCtx, cancel := context.WithCancel(ctx)
+	var workers sync.WaitGroup
+	defer func() {
+		cancel()
+		workers.Wait()
+	}()
+
 	server := &http.Server{
 		Addr:              ":" + cfg.Port,
 		Handler:           deps.router,
@@ -43,6 +52,14 @@ func Run(ctx context.Context, cfg *config.Config) error {
 	if err != nil {
 		return fmt.Errorf("listen http: %w", err)
 	}
+
+	workers.Go(func() {
+		usercountworker.RunUserCount(
+			workerCtx,
+			deps.userRepository,
+			10*time.Second,
+		)
+	})
 
 	slog.Info(
 		"HTTP server is running",
