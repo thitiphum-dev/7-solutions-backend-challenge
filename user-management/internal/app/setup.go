@@ -8,7 +8,10 @@ import (
 	"time"
 
 	httpadapter "github.com/thitiphum-dev/7-solutions-backend-challenge/user-management/internal/adapters/http"
+	"github.com/thitiphum-dev/7-solutions-backend-challenge/user-management/internal/adapters/http/handler"
 	"github.com/thitiphum-dev/7-solutions-backend-challenge/user-management/internal/adapters/mongodb"
+	"github.com/thitiphum-dev/7-solutions-backend-challenge/user-management/internal/adapters/security"
+	"github.com/thitiphum-dev/7-solutions-backend-challenge/user-management/internal/application"
 	"github.com/thitiphum-dev/7-solutions-backend-challenge/user-management/internal/config"
 )
 
@@ -26,11 +29,35 @@ func setup(ctx context.Context, cfg *config.Config) (*dependencies, error) {
 		return nil, err
 	}
 
-	slog.Info(
-		"MongoDB connection established",
+	userRepository := mongodb.NewUserRepository(
+		mongoClient.Database(cfg.MongoDatabase),
 	)
 
-	router := httpadapter.NewRouter()
+	indexCtx, cancelIndex := context.WithTimeout(ctx, 5*time.Second)
+	err = userRepository.EnsureIndexes(indexCtx)
+	cancelIndex()
+	if err != nil {
+		closeCtx, cancelClose := context.WithTimeout(
+			context.Background(),
+			5*time.Second,
+		)
+		defer cancelClose()
+
+		_ = mongoClient.Disconnect(closeCtx)
+		return nil, fmt.Errorf("ensure user indexes: %w", err)
+	}
+
+	slog.Info(
+		"MongoDB connection and indexes established",
+	)
+
+	authService := application.NewAuthService(
+		userRepository,
+		security.NewBcryptHasher(),
+		security.NewJWT(cfg.JWTSecret, 24*time.Hour),
+	)
+	authHandler := handler.NewAuthHandler(authService)
+	router := httpadapter.NewRouter(authHandler)
 
 	return &dependencies{
 		router:      router,
