@@ -9,6 +9,7 @@ import (
 
 	httpadapter "github.com/thitiphum-dev/7-solutions-backend-challenge/user-management/internal/adapters/http"
 	"github.com/thitiphum-dev/7-solutions-backend-challenge/user-management/internal/adapters/http/handler"
+	"github.com/thitiphum-dev/7-solutions-backend-challenge/user-management/internal/adapters/http/middleware"
 	"github.com/thitiphum-dev/7-solutions-backend-challenge/user-management/internal/adapters/mongodb"
 	"github.com/thitiphum-dev/7-solutions-backend-challenge/user-management/internal/adapters/security"
 	"github.com/thitiphum-dev/7-solutions-backend-challenge/user-management/internal/application"
@@ -51,13 +52,24 @@ func setup(ctx context.Context, cfg *config.Config) (*dependencies, error) {
 		"MongoDB connection and indexes established",
 	)
 
+	hasher := security.NewBcryptHasher()
+	jwtIssuer := security.NewJWT(cfg.JWTSecret, 24*time.Hour)
+
 	authService := application.NewAuthService(
 		userRepository,
-		security.NewBcryptHasher(),
-		security.NewJWT(cfg.JWTSecret, 24*time.Hour),
+		hasher,
+		jwtIssuer,
 	)
+	userService := application.NewUserService(userRepository)
+
 	authHandler := handler.NewAuthHandler(authService)
-	router := httpadapter.NewRouter(authHandler)
+	userHandler := handler.NewUserHandler(userService)
+	authMiddleware := middleware.NewAuth(jwtIssuer)
+	router := httpadapter.NewRouter(
+		authHandler,
+		userHandler,
+		authMiddleware,
+	)
 
 	return &dependencies{
 		router:      router,
