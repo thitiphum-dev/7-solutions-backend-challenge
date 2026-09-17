@@ -9,3 +9,8 @@ type User struct {
 	PasswordHash string
 	CreatedAt    time.Time
 }
+
+type Update struct {
+	Name  *string
+	Email *string
+}
